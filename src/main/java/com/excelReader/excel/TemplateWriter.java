@@ -152,7 +152,7 @@ public class TemplateWriter {
             if (itemRow == null) {
                 itemRow = sheet.createRow(itemRowNum);
             }
-            itemRow.setHeightInPoints(100); // Height for 5-line Particulars content
+            itemRow.setHeightInPoints(35); // Further reduced height for Particulars content
 
             // Get values from the current item in the source invoice
             Map<String, Object> currentItem = items.get(i);
@@ -186,32 +186,46 @@ public class TemplateWriter {
 
         // Set the totals in their new positions (shifted down by totalRowsToInsert)
         int totalsRowOffset = itemsStartRow + totalRowsToInsert;
-        setCell(sheet, totalsRowOffset, 5, "Sub Total:");
-        setCell(sheet, totalsRowOffset, 6, subTotal);
+        setCellWithBordersLeftAlign(sheet, totalsRowOffset, 5, "Sub Total:");
+        setCellWithBordersAndCenter(sheet, totalsRowOffset, 6, subTotal);
 
         if (isDollarCurrency) {
             // For dollar currency, only show Subtotal and Total
             double total = subTotal; // No taxes for dollar currency
-            setCell(sheet, totalsRowOffset + 1, 5, "Total:");
-            setCell(sheet, totalsRowOffset + 1, 6, total);
-            setCellWithBordersCenterItalicBold(sheet, totalsRowOffset + 2, 1, amountInWords(total));
+            setCellWithBordersLeftAlign(sheet, totalsRowOffset + 1, 5, "Total:");
+            setCellWithBordersAndCenter(sheet, totalsRowOffset + 1, 6, total);
+
+            // Set height for Amount in Words row to exactly two lines
+            Row amountInWordsRow = sheet.getRow(totalsRowOffset + 1);
+            if (amountInWordsRow == null) {
+                amountInWordsRow = sheet.createRow(totalsRowOffset +  1);
+            }
+            amountInWordsRow.setHeightInPoints(18.7f); // Height for exactly two lines (45% reduction from 34f)
+            setCellWithBordersCenterItalicBoldNoWrap(sheet, totalsRowOffset + 2, 1, "Amount in words: " + amountInWords(total, true));
         } else {
             // For regular currency, show CGST/SGST
             double sgst = round2(subTotal * 0.09);
             double cgst = round2(subTotal * 0.09);
             double total = round2(subTotal + sgst + cgst);
 
-            setCell(sheet, totalsRowOffset + 1, 5, "SGST:");
-            setCell(sheet, totalsRowOffset + 1, 6, sgst);
-            setCell(sheet, totalsRowOffset + 2, 5, "CGST:");
-            setCell(sheet, totalsRowOffset + 2, 6, cgst);
-            setCell(sheet, totalsRowOffset + 3, 5, "Total:");
-            setCell(sheet, totalsRowOffset + 3, 6, total);
-            setCellWithBordersCenterItalicBold(sheet, totalsRowOffset + 4, 1, amountInWords(total));
+            setCellWithBordersLeftAlign(sheet, totalsRowOffset + 1, 5, "SGST:");
+            setCellWithBordersAndCenter(sheet, totalsRowOffset + 1, 6, sgst);
+            setCellWithBordersLeftAlign(sheet, totalsRowOffset + 2, 5, "CGST:");
+            setCellWithBordersAndCenter(sheet, totalsRowOffset + 2, 6, cgst);
+            setCellWithBordersLeftAlign(sheet, totalsRowOffset + 3, 5, "Total:");
+            setCellWithBordersAndCenter(sheet, totalsRowOffset + 3, 6, total);
+
+            // Set height for Amount in Words row to exactly two lines
+            Row amountInWordsRow = sheet.getRow(totalsRowOffset + 1);
+            if (amountInWordsRow == null) {
+                amountInWordsRow = sheet.createRow(totalsRowOffset + 1);
+            }
+            amountInWordsRow.setHeightInPoints(18.7f); // Height for exactly two lines (45% reduction from 34f)
+            setCellWithBordersCenterItalicBoldNoWrap(sheet, totalsRowOffset + 4, 1, "Amount in words: " + amountInWords(total, false));
         }
 
         // Auto-size columns with limits
-        autoSizeColumnsWithLimit(sheet);
+        autoSizeColumnsWithLimit(sheet, isDollarCurrency);
 
         String outFile =
                 outputDir + "invoice_" +
@@ -226,7 +240,7 @@ public class TemplateWriter {
         PdfGeneratorLibreOffice.generatePdfFromExcel(outFile);
     }
 
-    private static void autoSizeColumnsWithLimit(Sheet sheet) {
+    private static void autoSizeColumnsWithLimit(Sheet sheet, boolean isDollarCurrency) {
         // Auto-size all columns to fit content
         for (int col = 1; col <= 6; col++) {
             sheet.autoSizeColumn(col);
@@ -248,8 +262,9 @@ public class TemplateWriter {
         }
 
         // Ensure Rate column (column 5) has adequate width for rate values
-        if (sheet.getColumnWidth(5) < 12 * 256) {
-            sheet.setColumnWidth(5, 12 * 256); // Minimum width for Rate column
+        int rateColumnWidth = isDollarCurrency ? 18 * 256 : 12 * 256; // Wider for template2
+        if (sheet.getColumnWidth(5) < rateColumnWidth) {
+            sheet.setColumnWidth(5, rateColumnWidth); // Wider minimum width for Rate column in template2
         }
 
         // Ensure Amount column (column 6) has adequate width for currency values
@@ -258,12 +273,15 @@ public class TemplateWriter {
         }
     }
 
-    private static String amountInWords(double amount) {
-        long rupees = (long) amount;
-        long paise = Math.round((amount - rupees) * 100);
+    private static String amountInWords(double amount, boolean isDollar) {
+        long wholeUnits = (long) amount;
+        long fractionalUnits = Math.round((amount - wholeUnits) * 100);
 
-        return convert(rupees) + " Rupees"
-                + (paise > 0 ? " and " + convert(paise) + " Paise" : "");
+        String currencyName = isDollar ? "Dollars" : "Rupees";
+        String fractionalName = isDollar ? "Cents" : "Paise";
+
+        return convert(wholeUnits) + " " + currencyName
+                + (fractionalUnits > 0 ? " and " + convert(fractionalUnits) + " " + fractionalName : "");
     }
 
 
@@ -320,6 +338,9 @@ public class TemplateWriter {
         } else {
             c.setCellValue(value.toString());
         }
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
     }
 
     private static Cell setCellWithBordersAndCenter(
@@ -344,13 +365,14 @@ public class TemplateWriter {
             c.setCellValue("");
         }
 
-        // Create cell style with borders and top alignment
+        // Create cell style with borders and center alignment
         CellStyle style = wb.createCellStyle();
         style.setBorderTop(BorderStyle.THIN);
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         style.setWrapText(true); // Enable text wrapping
 
         // If it's a number, add number formatting
@@ -359,6 +381,10 @@ public class TemplateWriter {
         }
 
         c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
         return c;
     }
 
@@ -390,7 +416,8 @@ public class TemplateWriter {
         style.setBorderBottom(BorderStyle.THIN);
         style.setBorderLeft(BorderStyle.THIN);
         style.setBorderRight(BorderStyle.THIN);
-        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
         style.setWrapText(true); // Enable text wrapping
 
         // Create font with italic and bold styling
@@ -405,7 +432,149 @@ public class TemplateWriter {
         }
 
         c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
         return c;
+    }
+
+    private static Cell setCellWithBordersLeftAlign(
+            Sheet sheet,
+            int row,
+            int col,
+            Object value) {
+
+        Workbook wb = sheet.getWorkbook();
+        Row r = sheet.getRow(row);
+        if (r == null) r = sheet.createRow(row);
+
+        Cell c = r.getCell(col);
+        if (c == null) c = r.createCell(col);
+
+        // Set cell value based on type
+        if (value instanceof Number) {
+            c.setCellValue(((Number) value).doubleValue());
+        } else if (value != null) {
+            c.setCellValue(value.toString());
+        } else {
+            c.setCellValue("");
+        }
+
+        // Create cell style with borders and left alignment
+        CellStyle style = wb.createCellStyle();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true); // Enable text wrapping
+
+        // If it's a number, add number formatting
+        if (value instanceof Number) {
+            style.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
+        return c;
+    }
+
+    private static Cell setCellWithBordersCenterItalicBoldNoWrap(
+            Sheet sheet,
+            int row,
+            int col,
+            Object value) {
+
+        Workbook wb = sheet.getWorkbook();
+        Row r = sheet.getRow(row);
+        if (r == null) r = sheet.createRow(row);
+
+        Cell c = r.getCell(col);
+        if (c == null) c = r.createCell(col);
+
+        // Set cell value based on type
+        if (value instanceof Number) {
+            c.setCellValue(((Number) value).doubleValue());
+        } else if (value != null) {
+            c.setCellValue(value.toString());
+        } else {
+            c.setCellValue("");
+        }
+
+        // Create cell style with borders, center alignment, italic and bold, no text wrapping
+        CellStyle style = wb.createCellStyle();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true); // Disable text wrapping for single line
+
+        // Create font with italic and bold styling
+        Font font = wb.createFont();
+        font.setItalic(true);
+        font.setBold(true);
+        style.setFont(font);
+
+        // If it's a number, add number formatting
+        if (value instanceof Number) {
+            style.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        c.setCellStyle(style);
+
+        // Adjust row height if text is long to fit within 2 lines
+        adjustRowHeightForText(sheet, row, col, value);
+
+        return c;
+    }
+
+    private static void adjustRowHeightForText(Sheet sheet, int row, int col, Object value) {
+        if (value == null || value instanceof Number) return;
+
+        String text = value.toString();
+        if (text.isEmpty()) return;
+
+        Row r = sheet.getRow(row);
+        if (r == null) return;
+
+        // Get column width in characters (approximate)
+        double columnWidthInChars = sheet.getColumnWidth(col) / 256.0;
+
+        // Estimate characters per line (rough approximation)
+        int charsPerLine = (int) Math.max(1, columnWidthInChars * 0.8);
+
+        // Count approximate lines needed
+        int linesNeeded = 1;
+        if (text.length() > charsPerLine) {
+            // Simple line counting based on spaces and length
+            String[] words = text.split("\\s+");
+            int currentLineLength = 0;
+
+            for (String word : words) {
+                if (currentLineLength + word.length() + 1 > charsPerLine) {
+                    linesNeeded++;
+                    currentLineLength = word.length();
+                } else {
+                    currentLineLength += word.length() + 1;
+                }
+            }
+        }
+
+        // Set minimum height per line (in points)
+        float baseHeight = 12f; // Reduced base height
+        float heightPerLine = 10f; // Reduced additional height per line
+
+        float newHeight = baseHeight + (heightPerLine * (linesNeeded - 1));
+        newHeight = Math.max(newHeight, r.getHeightInPoints()); // Don't reduce height
+
+        r.setHeightInPoints(newHeight);
     }
 
     private static double round2(double value) {
