@@ -11,6 +11,15 @@ import java.util.Map;
 
 public class TemplateWriter {
 
+    // Base row positions - these can be adjusted if template changes
+    private static final int INVOICE_TITLE_ROW = 8;
+    private static final int INVOICE_DATE_ROW = 9;
+    private static final int CLIENT_NAME_ROW = 10;
+    private static final int INVOICE_NO_ROW = 13; // Moved down by 2 rows (PAN + GSTN, no extra gap)
+
+    // Dynamic positions calculated from base rows
+    private static final int PARTICULARS_HEADER_ROW = INVOICE_NO_ROW + 2; // 2 rows after invoice no
+    private static final int ITEMS_START_ROW = PARTICULARS_HEADER_ROW + 1;
 
     public static void generateInvoice(
             String invoiceNo,
@@ -37,19 +46,21 @@ public class TemplateWriter {
             sheet = wb.createSheet("Invoice");
 
             // Add basic headers
-            setCell(sheet, 8, 1, "INVOICE");
-            setCell(sheet, 9, 1, "Invoice Date:");
-            setCell(sheet, 10, 1, "Client Name:");
-            setCell(sheet, 11, 1, "Invoice No:");
-            setCell(sheet, 13, 1, "Particulars");
-            setCell(sheet, 13, 4, "QTY");
-            setCell(sheet, 13, 5, "Rate");
-            setCell(sheet, 13, 6, "Amount");
-            setCell(sheet, 14, 5, "Subtotal:");
-            setCell(sheet, 15, 5, "SGST 9%:");
-            setCell(sheet, 16, 5, "CGST 9%:");
-            setCell(sheet, 17, 5, "Total:");
-            setCell(sheet, 18, 1, "Amount in Words:");
+            setCell(sheet, INVOICE_TITLE_ROW, 1, "INVOICE");
+            setCell(sheet, INVOICE_DATE_ROW, 1, "Invoice Date:");
+            setCell(sheet, CLIENT_NAME_ROW, 1, "Client Name:");
+            setCell(sheet, CLIENT_NAME_ROW + 1, 1, "Client PAN:");
+            setCell(sheet, CLIENT_NAME_ROW + 2, 1, "Client GSTN:");
+            setCell(sheet, INVOICE_NO_ROW, 1, "Invoice No:");
+            setCell(sheet, PARTICULARS_HEADER_ROW, 1, "Particulars");
+            setCell(sheet, PARTICULARS_HEADER_ROW, 4, "QTY");
+            setCell(sheet, PARTICULARS_HEADER_ROW, 5, "Rate");
+            setCell(sheet, PARTICULARS_HEADER_ROW, 6, "Amount");
+            setCell(sheet, ITEMS_START_ROW, 5, "Subtotal:");
+            setCell(sheet, ITEMS_START_ROW + 1, 5, "SGST 9%:");
+            setCell(sheet, ITEMS_START_ROW + 2, 5, "CGST 9%:");
+            setCell(sheet, ITEMS_START_ROW + 3, 5, "Total:");
+            setCell(sheet, ITEMS_START_ROW + 4, 1, "Amount in Words:");
         }
 
         // ===== HEADER =====
@@ -64,22 +75,26 @@ public class TemplateWriter {
             String invoiceDate = formatDate(headerSource.get("Invoice Date"));
             String clientName = headerSource.get("Client Name") != null ? headerSource.get("Client Name").toString() : "";
             String clientAddress = headerSource.get("Client Address") != null ? headerSource.get("Client Address").toString() : "";
+            String clientPan = headerSource.get("Client PAN") != null ? headerSource.get("Client PAN").toString() : "";
+            String clientGstn = headerSource.get("Client GSTIN") != null ? headerSource.get("Client GSTIN").toString() : "";
 
-            setCell(sheet, 9, 3, invoiceDate);
-            setCell(sheet, 10, 3, clientName + "\n" + clientAddress);
+            setCell(sheet, INVOICE_DATE_ROW, 3, invoiceDate);
+            setCell(sheet, CLIENT_NAME_ROW, 3, clientName + "\n" + clientAddress);
+            setCell(sheet, CLIENT_NAME_ROW + 1, 3, clientPan); // Client PAN row
+            setCell(sheet, CLIENT_NAME_ROW + 2, 3, clientGstn); // Client GSTN row
         }
-        setCell(sheet, 11, 3, invoiceNo);
+        setCell(sheet, INVOICE_NO_ROW, 3, invoiceNo);
 
         // Calculate total rows needed: 1 item row for each item
         int numItems = items.size();
         int totalRowsToInsert = numItems; // For each item: 1 content row
 
         // Shift rows down to make space for items with blank rows in between
-        sheet.shiftRows(14, sheet.getLastRowNum(), totalRowsToInsert);
+        sheet.shiftRows(ITEMS_START_ROW, sheet.getLastRowNum(), totalRowsToInsert);
 
         // ===== PARTICULARS =====
         double subTotal = 0;
-        int currentRowIndex = 14;
+        int currentRowIndex = ITEMS_START_ROW;
 
         // Create rows for each item
         for (int i = 0; i < numItems; i++) {
@@ -127,7 +142,7 @@ public class TemplateWriter {
         double total = round2(subTotal + sgst + cgst);
 
         // Set the totals in their new positions (shifted down by totalRowsToInsert)
-        int totalsRowOffset = 14 + totalRowsToInsert;
+        int totalsRowOffset = ITEMS_START_ROW + totalRowsToInsert;
         setCell(sheet, totalsRowOffset, 5, "Sub Total:");
         setCell(sheet, totalsRowOffset, 6, subTotal);
         setCell(sheet, totalsRowOffset + 1, 5, "SGST:");
