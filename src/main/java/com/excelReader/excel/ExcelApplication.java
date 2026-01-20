@@ -16,6 +16,8 @@ public class ExcelApplication {
 
 		String templatePath =
 				"C:/Users/amitz/Downloads/Invoices/invoice_template.xlsx";
+		String templatePath2 =
+				"C:/Users/amitz/Downloads/Invoices/invoice_template_2.xlsx";
 
 		String outputDir =
 				"C:/Users/amitz/Downloads/Invoices/op/";
@@ -26,11 +28,25 @@ public class ExcelApplication {
 
 		for (Map.Entry<String, InvoiceData> e : invoices.entrySet()) {
 
+			// Check currency to determine which template to use
+			String currency = "";
+			String selectedTemplatePath = templatePath; // Default template
+
+			if (e.getValue().header != null) {
+				Object currencyObj = e.getValue().header.get("Currency");
+				if (currencyObj != null) {
+					currency = currencyObj.toString().toLowerCase();
+					if ("dollar".equals(currency)) {
+						selectedTemplatePath = templatePath2; // Use template 2 for dollar currency
+					}
+				}
+			}
+
 			TemplateWriter.generateInvoice(
 					e.getKey(),
 					e.getValue().header,
 					e.getValue().items,
-					templatePath,
+					selectedTemplatePath,
 					outputDir
 			);
 		}

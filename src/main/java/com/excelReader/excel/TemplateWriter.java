@@ -34,6 +34,25 @@ public class TemplateWriter {
             return;
         }
 
+        // Check currency from header data or first item to determine tax calculations and layout
+        boolean isDollarCurrency = false;
+        Map<String, Object> currencySource = header;
+        if (currencySource == null && !items.isEmpty()) {
+            currencySource = items.get(0);
+        }
+
+        if (currencySource != null) {
+            String currency = currencySource.get("Currency") != null ? currencySource.get("Currency").toString().toLowerCase() : "";
+            if ("dollar".equals(currency)) {
+                isDollarCurrency = true;
+            }
+        }
+
+        // Calculate dynamic row positions based on currency
+        int invoiceNoRow = isDollarCurrency ? CLIENT_NAME_ROW + 1 : INVOICE_NO_ROW;
+        int particularsHeaderRow = invoiceNoRow + 2;
+        int itemsStartRow = particularsHeaderRow + 1;
+
         Workbook wb;
         Sheet sheet;
 
@@ -49,18 +68,37 @@ public class TemplateWriter {
             setCell(sheet, INVOICE_TITLE_ROW, 1, "INVOICE");
             setCell(sheet, INVOICE_DATE_ROW, 1, "Invoice Date:");
             setCell(sheet, CLIENT_NAME_ROW, 1, "Client Name:");
-            setCell(sheet, CLIENT_NAME_ROW + 1, 1, "Client PAN:");
-            setCell(sheet, CLIENT_NAME_ROW + 2, 1, "Client GSTN:");
-            setCell(sheet, INVOICE_NO_ROW, 1, "Invoice No:");
-            setCell(sheet, PARTICULARS_HEADER_ROW, 1, "Particulars");
-            setCell(sheet, PARTICULARS_HEADER_ROW, 4, "QTY");
-            setCell(sheet, PARTICULARS_HEADER_ROW, 5, "Rate");
-            setCell(sheet, PARTICULARS_HEADER_ROW, 6, "Amount");
+
+            // Calculate positions based on currency
+            int templateInvoiceNoRow = CLIENT_NAME_ROW + 1; // Default after client name
+            int templateParticularsRow = PARTICULARS_HEADER_ROW; // Default position
+
+            if (!isDollarCurrency) {
+                // For non-dollar currency, show PAN and GSTN
+                setCell(sheet, CLIENT_NAME_ROW + 1, 1, "Client PAN:");
+                setCell(sheet, CLIENT_NAME_ROW + 2, 1, "Client GSTN:");
+                templateInvoiceNoRow = CLIENT_NAME_ROW + 3; // Invoice No after PAN and GSTN
+            }
+
+            setCell(sheet, templateInvoiceNoRow, 1, "Invoice No:");
+            setCell(sheet, templateParticularsRow, 1, "Particulars");
+            setCell(sheet, templateParticularsRow, 4, "QTY");
+            setCell(sheet, templateParticularsRow, 5, "Rate");
+            setCell(sheet, templateParticularsRow, 6, "Amount");
+
+            // Add totals section based on currency
             setCell(sheet, ITEMS_START_ROW, 5, "Subtotal:");
-            setCell(sheet, ITEMS_START_ROW + 1, 5, "SGST 9%:");
-            setCell(sheet, ITEMS_START_ROW + 2, 5, "CGST 9%:");
-            setCell(sheet, ITEMS_START_ROW + 3, 5, "Total:");
-            setCell(sheet, ITEMS_START_ROW + 4, 1, "Amount in Words:");
+            if (isDollarCurrency) {
+                // For dollar currency, only show Subtotal and Total
+                setCell(sheet, ITEMS_START_ROW + 1, 5, "Total:");
+                setCell(sheet, ITEMS_START_ROW + 2, 1, "Amount in Words:");
+            } else {
+                // For regular currency, show CGST/SGST
+                setCell(sheet, ITEMS_START_ROW + 1, 5, "SGST 9%:");
+                setCell(sheet, ITEMS_START_ROW + 2, 5, "CGST 9%:");
+                setCell(sheet, ITEMS_START_ROW + 3, 5, "Total:");
+                setCell(sheet, ITEMS_START_ROW + 4, 1, "Amount in Words:");
+            }
         }
 
         // ===== HEADER =====
@@ -75,26 +113,34 @@ public class TemplateWriter {
             String invoiceDate = formatDate(headerSource.get("Invoice Date"));
             String clientName = headerSource.get("Client Name") != null ? headerSource.get("Client Name").toString() : "";
             String clientAddress = headerSource.get("Client Address") != null ? headerSource.get("Client Address").toString() : "";
-            String clientPan = headerSource.get("Client PAN") != null ? headerSource.get("Client PAN").toString() : "";
-            String clientGstn = headerSource.get("Client GSTIN") != null ? headerSource.get("Client GSTIN").toString() : "";
 
             setCell(sheet, INVOICE_DATE_ROW, 3, invoiceDate);
             setCell(sheet, CLIENT_NAME_ROW, 3, clientName + "\n" + clientAddress);
-            setCell(sheet, CLIENT_NAME_ROW + 1, 3, clientPan); // Client PAN row
-            setCell(sheet, CLIENT_NAME_ROW + 2, 3, clientGstn); // Client GSTN row
+
+            // Only show PAN and GSTN for non-dollar currency
+            if (!isDollarCurrency) {
+                String clientPan = headerSource.get("Client PAN") != null ? headerSource.get("Client PAN").toString() : "";
+                String clientGstn = headerSource.get("Client GSTIN") != null ? headerSource.get("Client GSTIN").toString() : "";
+                setCell(sheet, CLIENT_NAME_ROW + 1, 3, clientPan); // Client PAN row
+                setCell(sheet, CLIENT_NAME_ROW + 2, 3, clientGstn); // Client GSTN row
+            }
+
+            setCell(sheet, invoiceNoRow, 3, invoiceNo);
+        } else {
+            // Fallback if no header data
+            setCell(sheet, invoiceNoRow, 3, invoiceNo);
         }
-        setCell(sheet, INVOICE_NO_ROW, 3, invoiceNo);
 
         // Calculate total rows needed: 1 item row for each item
         int numItems = items.size();
         int totalRowsToInsert = numItems; // For each item: 1 content row
 
         // Shift rows down to make space for items with blank rows in between
-        sheet.shiftRows(ITEMS_START_ROW, sheet.getLastRowNum(), totalRowsToInsert);
+        sheet.shiftRows(itemsStartRow, sheet.getLastRowNum(), totalRowsToInsert);
 
         // ===== PARTICULARS =====
         double subTotal = 0;
-        int currentRowIndex = ITEMS_START_ROW;
+        int currentRowIndex = itemsStartRow;
 
         // Create rows for each item
         for (int i = 0; i < numItems; i++) {
@@ -137,21 +183,32 @@ public class TemplateWriter {
 
         // Calculate totals after accumulating all amounts
         subTotal = round2(subTotal);
-        double sgst = round2(subTotal * 0.09);
-        double cgst = round2(subTotal * 0.09);
-        double total = round2(subTotal + sgst + cgst);
 
         // Set the totals in their new positions (shifted down by totalRowsToInsert)
-        int totalsRowOffset = ITEMS_START_ROW + totalRowsToInsert;
+        int totalsRowOffset = itemsStartRow + totalRowsToInsert;
         setCell(sheet, totalsRowOffset, 5, "Sub Total:");
         setCell(sheet, totalsRowOffset, 6, subTotal);
-        setCell(sheet, totalsRowOffset + 1, 5, "SGST:");
-        setCell(sheet, totalsRowOffset + 1, 6, sgst);
-        setCell(sheet, totalsRowOffset + 2, 5, "CGST:");
-        setCell(sheet, totalsRowOffset + 2, 6, cgst);
-        setCell(sheet, totalsRowOffset + 3, 5, "Total:");
-        setCell(sheet, totalsRowOffset + 3, 6, total);
-        setCellWithBordersCenterItalicBold(sheet,totalsRowOffset+ 4,1, amountInWords(total));
+
+        if (isDollarCurrency) {
+            // For dollar currency, only show Subtotal and Total
+            double total = subTotal; // No taxes for dollar currency
+            setCell(sheet, totalsRowOffset + 1, 5, "Total:");
+            setCell(sheet, totalsRowOffset + 1, 6, total);
+            setCellWithBordersCenterItalicBold(sheet, totalsRowOffset + 2, 1, amountInWords(total));
+        } else {
+            // For regular currency, show CGST/SGST
+            double sgst = round2(subTotal * 0.09);
+            double cgst = round2(subTotal * 0.09);
+            double total = round2(subTotal + sgst + cgst);
+
+            setCell(sheet, totalsRowOffset + 1, 5, "SGST:");
+            setCell(sheet, totalsRowOffset + 1, 6, sgst);
+            setCell(sheet, totalsRowOffset + 2, 5, "CGST:");
+            setCell(sheet, totalsRowOffset + 2, 6, cgst);
+            setCell(sheet, totalsRowOffset + 3, 5, "Total:");
+            setCell(sheet, totalsRowOffset + 3, 6, total);
+            setCellWithBordersCenterItalicBold(sheet, totalsRowOffset + 4, 1, amountInWords(total));
+        }
 
         // Auto-size columns with limits
         autoSizeColumnsWithLimit(sheet);
