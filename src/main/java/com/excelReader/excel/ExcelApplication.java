@@ -8,11 +8,9 @@ public class ExcelApplication {
 
 		String headerFile =
 				"C:/Users/amitz/Downloads/Invoices/clientDetails.xlsx";
-//				"C:/Users/amitz/Downloads/Invoices/temp/temp2.xlsx";
 
 		String itemsFile =
 				"C:/Users/amitz/Downloads/Invoices/invoiceDetails.xlsx";
-//				"C:/Users/amitz/Downloads/Invoices/temp/temp1.xlsx";
 
 		String templatePath =
 				"C:/Users/amitz/Downloads/Invoices/invoice_template.xlsx";
