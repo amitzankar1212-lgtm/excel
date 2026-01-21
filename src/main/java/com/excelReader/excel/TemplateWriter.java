@@ -2,6 +2,8 @@ package com.excelReader.excel;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.text.SimpleDateFormat;
@@ -10,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 public class TemplateWriter {
+
+    private static final Logger logger = LoggerFactory.getLogger(TemplateWriter.class);
 
     // Base row positions - these can be adjusted if template changes
     private static final int INVOICE_TITLE_ROW = 8;
@@ -238,12 +242,23 @@ public class TemplateWriter {
                         invoiceNo.replace("/", "_") +
                         ".xlsm";
 
-        try (FileOutputStream fos = new FileOutputStream(outFile)) {
-            wb.write(fos);
-        }
-        wb.close();
+        try {
+            logger.debug("💾 Saving Excel file: {}", outFile);
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                wb.write(fos);
+            }
+            wb.close();
+            logger.info("📄 Excel file generated successfully: {}", outFile);
 
-        PdfGeneratorLibreOffice.generatePdfFromExcel(outFile);
+            logger.debug("🖨️ Generating PDF from Excel: {}", outFile);
+            PdfGeneratorLibreOffice.generatePdfFromExcel(outFile);
+            String pdfFile = outFile.replace(".xlsm", ".pdf");
+            logger.info("📋 PDF file generated successfully: {}", pdfFile);
+
+        } catch (Exception ex) {
+            logger.error("❌ Failed to generate files for invoice {}: {}", invoiceNo, ex.getMessage(), ex);
+            throw ex;
+        }
     }
 
     private static void autoSizeColumnsWithLimit(Sheet sheet, boolean isDollarCurrency) {

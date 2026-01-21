@@ -2,6 +2,7 @@ package com.excelReader.excel;
 
 import org.apache.poi.ss.usermodel.*;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.*;
 
 public class SourceExcelReader {
@@ -11,28 +12,20 @@ public class SourceExcelReader {
             String itemsFilePath) throws Exception {
 
         // ===== READ HEADER FILE =====
-        Workbook headerWb =
-                WorkbookFactory.create(new FileInputStream(headerFilePath));
-        FormulaEvaluator headerEval =
-                headerWb.getCreationHelper().createFormulaEvaluator();
-
-        Sheet headerSheet = headerWb.getSheetAt(0);
-        List<Map<String, Object>> headers =
-                readHeaderRecords(headerSheet, headerEval);
-
-        headerWb.close();
+        List<Map<String, Object>> headers;
+        try (Workbook headerWb = WorkbookFactory.create(new FileInputStream(headerFilePath))) {
+            FormulaEvaluator headerEval = headerWb.getCreationHelper().createFormulaEvaluator();
+            Sheet headerSheet = headerWb.getSheetAt(0);
+            headers = readHeaderRecords(headerSheet, headerEval);
+        }
 
         // ===== READ ITEMS FILE =====
-        Workbook itemsWb =
-                WorkbookFactory.create(new FileInputStream(itemsFilePath));
-        FormulaEvaluator itemsEval =
-                itemsWb.getCreationHelper().createFormulaEvaluator();
-
-        Sheet itemsSheet = itemsWb.getSheetAt(0);
-        List<Map<String, Object>> items =
-                readItemsSheet(itemsSheet, itemsEval);
-
-        itemsWb.close();
+        List<Map<String, Object>> items;
+        try (Workbook itemsWb = WorkbookFactory.create(new FileInputStream(itemsFilePath))) {
+            FormulaEvaluator itemsEval = itemsWb.getCreationHelper().createFormulaEvaluator();
+            Sheet itemsSheet = itemsWb.getSheetAt(0);
+            items = readItemsSheet(itemsSheet, itemsEval);
+        }
 
         // ===== HEADER DRIVEN MATCHING =====
         Map<String, InvoiceData> result = new LinkedHashMap<>();
@@ -148,5 +141,104 @@ public class SourceExcelReader {
         return cell.getCellType() == CellType.NUMERIC
                 ? cell.getNumericCellValue()
                 : cell.getStringCellValue();
+    }
+
+    /**
+     * Update the status of a specific invoice in the items Excel file
+     * @param itemsFilePath Path to the items Excel file
+     * @param invoiceNo Invoice number to update
+     * @param newStatus New status to set (pending, Inprocess, completed)
+     */
+    public static void updateInvoiceStatus(String itemsFilePath, String invoiceNo, String newStatus) throws Exception {
+        Workbook workbook = null;
+        FileInputStream fis = null;
+
+        try {
+            fis = new FileInputStream(itemsFilePath);
+            workbook = WorkbookFactory.create(fis);
+            Sheet sheet = workbook.getSheetAt(0);
+
+            Row headerRow = sheet.getRow(0);
+            if (headerRow == null) {
+                throw new Exception("Header row not found in items file");
+            }
+
+            // Find the column index for "Status"
+            int statusColumnIndex = -1;
+            for (int c = 0; c < headerRow.getLastCellNum(); c++) {
+                Cell keyCell = headerRow.getCell(c);
+                if (keyCell != null && keyCell.getCellType() == CellType.STRING) {
+                    String key = keyCell.getStringCellValue().trim();
+                    if ("Status".equalsIgnoreCase(key)) {
+                        statusColumnIndex = c;
+                        break;
+                    }
+                }
+            }
+
+            if (statusColumnIndex == -1) {
+                throw new Exception("Status column not found in items file");
+            }
+
+            // Find the row with the matching invoice number
+            boolean found = false;
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                // Find invoice number column
+                for (int c = 0; c < headerRow.getLastCellNum(); c++) {
+                    Cell keyCell = headerRow.getCell(c);
+                    if (keyCell != null && keyCell.getCellType() == CellType.STRING) {
+                        String key = keyCell.getStringCellValue().trim();
+                        if ("Invoice Number".equalsIgnoreCase(key)) {
+                            Cell invoiceCell = row.getCell(c);
+                            if (invoiceCell != null) {
+                                String cellInvoiceNo = getValue(invoiceCell, null).toString().trim();
+                                if (invoiceNo.trim().equals(cellInvoiceNo)) {
+                                    // Found the matching invoice, update status
+                                    Cell statusCell = row.getCell(statusColumnIndex);
+                                    if (statusCell == null) {
+                                        statusCell = row.createCell(statusColumnIndex);
+                                    }
+                                    statusCell.setCellValue(newStatus);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (found) break;
+            }
+
+            if (!found) {
+                throw new Exception("Invoice number " + invoiceNo + " not found in items file");
+            }
+
+            // Save the changes
+            try (FileOutputStream fos = new FileOutputStream(itemsFilePath)) {
+                workbook.write(fos);
+            }
+
+        } finally {
+            // Ensure resources are properly closed
+            if (workbook != null) {
+                try {
+                    workbook.close();
+                } catch (Exception e) {
+                    // Log but don't throw
+                    System.err.println("Warning: Could not close workbook: " + e.getMessage());
+                }
+            }
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (Exception e) {
+                    // Log but don't throw
+                    System.err.println("Warning: Could not close file input stream: " + e.getMessage());
+                }
+            }
+        }
     }
 }
