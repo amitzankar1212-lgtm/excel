@@ -66,8 +66,8 @@ public class TemplateWriter {
 
             // Add basic headers
             setCell(sheet, INVOICE_TITLE_ROW, 1, "INVOICE");
-            setCell(sheet, INVOICE_DATE_ROW, 1, "Invoice Date:");
-            setCell(sheet, CLIENT_NAME_ROW, 1, "Client Name:");
+            setCellWithBordersLeftTop(sheet, INVOICE_DATE_ROW, 1, "Invoice Date:");
+            setCellWithBordersLeftTop(sheet, CLIENT_NAME_ROW, 1, "Client Name:");
 
             // Calculate positions based on currency
             int templateInvoiceNoRow = CLIENT_NAME_ROW + 1; // Default after client name
@@ -114,21 +114,27 @@ public class TemplateWriter {
             String clientName = headerSource.get("Client Name") != null ? headerSource.get("Client Name").toString() : "";
             String clientAddress = headerSource.get("Client Address") != null ? headerSource.get("Client Address").toString() : "";
 
-            setCell(sheet, INVOICE_DATE_ROW, 3, invoiceDate);
-            setCell(sheet, CLIENT_NAME_ROW, 3, clientName + "\n" + clientAddress);
+            setCellWithBordersLeftAlign(sheet, INVOICE_DATE_ROW, 3, invoiceDate);
+            setCellWithBordersLeftTop(sheet, CLIENT_NAME_ROW, 3, clientName + "\n" + clientAddress);
+
+            // Set fixed height for Client Name & Address row to match invoice_template2
+            Row addressRow = sheet.getRow(CLIENT_NAME_ROW);
+            if (addressRow != null) {
+                addressRow.setHeightInPoints(50f); // Fixed height to match invoice_template2
+            }
 
             // Only show PAN and GSTN for non-dollar currency
             if (!isDollarCurrency) {
                 String clientPan = headerSource.get("Client PAN") != null ? headerSource.get("Client PAN").toString() : "";
                 String clientGstn = headerSource.get("Client GSTIN") != null ? headerSource.get("Client GSTIN").toString() : "";
-                setCell(sheet, CLIENT_NAME_ROW + 1, 3, clientPan); // Client PAN row
-                setCell(sheet, CLIENT_NAME_ROW + 2, 3, clientGstn); // Client GSTN row
+                setCellWithBordersLeftAlign(sheet, CLIENT_NAME_ROW + 1, 3, clientPan); // Client PAN row
+                setCellWithBordersLeftAlign(sheet, CLIENT_NAME_ROW + 2, 3, clientGstn); // Client GSTN row
             }
 
-            setCell(sheet, invoiceNoRow, 3, invoiceNo);
+            setCellWithBordersLeftAlign(sheet, invoiceNoRow, 3, invoiceNo);
         } else {
             // Fallback if no header data
-            setCell(sheet, invoiceNoRow, 3, invoiceNo);
+            setCellWithBordersLeftAlign(sheet, invoiceNoRow, 3, invoiceNo);
         }
 
         // Calculate total rows needed: 1 item row for each item
@@ -169,11 +175,11 @@ public class TemplateWriter {
             double qty = ExcelUtil.extractNumber(currentItem.get("QTY"), 1);
 
             // Set cell values with borders
-            setCellWithBordersAndCenter(sheet, itemRowNum, 1, particulars);
-            setCellWithBordersAndCenter(sheet, itemRowNum, 3, hsnSac);
-            setCellWithBordersAndCenter(sheet, itemRowNum, 4, qty);
-            setCellWithBordersAndCenter(sheet, itemRowNum, 5, rate);
-            setCellWithBordersAndCenter(sheet, itemRowNum, 6, amount);
+            setCellWithBordersLeftTop(sheet, itemRowNum, 1, particulars);
+            setCellWithBordersCenterTop(sheet, itemRowNum, 3, hsnSac);
+            setCellWithBordersCenterTop(sheet, itemRowNum, 4, qty);
+            setCellWithBordersRightTop(sheet, itemRowNum, 5, rate);
+            setCellWithBordersRightTop(sheet, itemRowNum, 6, amount);
 
             // Merge Particulars columns for item row
             sheet.addMergedRegion(new CellRangeAddress(itemRowNum, itemRowNum, 1, 2));
@@ -186,14 +192,14 @@ public class TemplateWriter {
 
         // Set the totals in their new positions (shifted down by totalRowsToInsert)
         int totalsRowOffset = itemsStartRow + totalRowsToInsert;
-        setCellWithBordersLeftAlign(sheet, totalsRowOffset, 5, "Sub Total:");
-        setCellWithBordersAndCenter(sheet, totalsRowOffset, 6, subTotal);
+        setCellWithBordersLeftTop(sheet, totalsRowOffset, 5, "Sub Total:");
+        setCellWithBordersRightTop(sheet, totalsRowOffset, 6, subTotal);
 
         if (isDollarCurrency) {
             // For dollar currency, only show Subtotal and Total
             double total = subTotal; // No taxes for dollar currency
-            setCellWithBordersLeftAlign(sheet, totalsRowOffset + 1, 5, "Total:");
-            setCellWithBordersAndCenter(sheet, totalsRowOffset + 1, 6, total);
+            setCellWithBordersLeftTop(sheet, totalsRowOffset + 1, 5, "Total:");
+            setCellWithBordersRightTop(sheet, totalsRowOffset + 1, 6, total);
 
             // Set height for Amount in Words row to exactly two lines
             Row amountInWordsRow = sheet.getRow(totalsRowOffset + 1);
@@ -209,11 +215,11 @@ public class TemplateWriter {
             double total = round2(subTotal + sgst + cgst);
 
             setCellWithBordersLeftAlign(sheet, totalsRowOffset + 1, 5, "SGST:");
-            setCellWithBordersAndCenter(sheet, totalsRowOffset + 1, 6, sgst);
+            setCellWithBordersRightTop(sheet, totalsRowOffset + 1, 6, sgst);
             setCellWithBordersLeftAlign(sheet, totalsRowOffset + 2, 5, "CGST:");
-            setCellWithBordersAndCenter(sheet, totalsRowOffset + 2, 6, cgst);
+            setCellWithBordersRightTop(sheet, totalsRowOffset + 2, 6, cgst);
             setCellWithBordersLeftAlign(sheet, totalsRowOffset + 3, 5, "Total:");
-            setCellWithBordersAndCenter(sheet, totalsRowOffset + 3, 6, total);
+            setCellWithBordersRightTop(sheet, totalsRowOffset + 3, 6, total);
 
             // Set height for Amount in Words row to exactly two lines
             Row amountInWordsRow = sheet.getRow(totalsRowOffset + 1);
@@ -484,6 +490,141 @@ public class TemplateWriter {
         return c;
     }
 
+    private static Cell setCellWithBordersLeftTop(
+            Sheet sheet,
+            int row,
+            int col,
+            Object value) {
+
+        Workbook wb = sheet.getWorkbook();
+        Row r = sheet.getRow(row);
+        if (r == null) r = sheet.createRow(row);
+
+        Cell c = r.getCell(col);
+        if (c == null) c = r.createCell(col);
+
+        // Set cell value based on type
+        if (value instanceof Number) {
+            c.setCellValue(((Number) value).doubleValue());
+        } else if (value != null) {
+            c.setCellValue(value.toString());
+        } else {
+            c.setCellValue("");
+        }
+
+        // Create cell style with borders and left top alignment
+        CellStyle style = wb.createCellStyle();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setWrapText(true); // Enable text wrapping
+
+        // If it's a number, add number formatting
+        if (value instanceof Number) {
+            style.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
+        return c;
+    }
+
+    private static Cell setCellWithBordersRightTop(
+            Sheet sheet,
+            int row,
+            int col,
+            Object value) {
+
+        Workbook wb = sheet.getWorkbook();
+        Row r = sheet.getRow(row);
+        if (r == null) r = sheet.createRow(row);
+
+        Cell c = r.getCell(col);
+        if (c == null) c = r.createCell(col);
+
+        // Set cell value based on type
+        if (value instanceof Number) {
+            c.setCellValue(((Number) value).doubleValue());
+        } else if (value != null) {
+            c.setCellValue(value.toString());
+        } else {
+            c.setCellValue("");
+        }
+
+        // Create cell style with borders and right top alignment
+        CellStyle style = wb.createCellStyle();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.RIGHT);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setWrapText(true); // Enable text wrapping
+
+        // If it's a number, add number formatting
+        if (value instanceof Number) {
+            style.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
+        return c;
+    }
+
+    private static Cell setCellWithBordersCenterTop(
+            Sheet sheet,
+            int row,
+            int col,
+            Object value) {
+
+        Workbook wb = sheet.getWorkbook();
+        Row r = sheet.getRow(row);
+        if (r == null) r = sheet.createRow(row);
+
+        Cell c = r.getCell(col);
+        if (c == null) c = r.createCell(col);
+
+        // Set cell value based on type
+        if (value instanceof Number) {
+            c.setCellValue(((Number) value).doubleValue());
+        } else if (value != null) {
+            c.setCellValue(value.toString());
+        } else {
+            c.setCellValue("");
+        }
+
+        // Create cell style with borders and center top alignment
+        CellStyle style = wb.createCellStyle();
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setWrapText(true); // Enable text wrapping
+
+        // If it's a number, add number formatting
+        if (value instanceof Number) {
+            style.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
+        }
+
+        c.setCellStyle(style);
+
+        // Adjust row height if text is long
+        adjustRowHeightForText(sheet, row, col, value);
+
+        return c;
+    }
+
     private static Cell setCellWithBordersCenterItalicBoldNoWrap(
             Sheet sheet,
             int row,
@@ -567,9 +708,9 @@ public class TemplateWriter {
             }
         }
 
-        // Set minimum height per line (in points)
-        float baseHeight = 12f; // Reduced base height
-        float heightPerLine = 10f; // Reduced additional height per line
+        // Set minimum height per line (in points) - further reduced for compact display
+        float baseHeight = 8f; // Further reduced base height
+        float heightPerLine = 6f; // Further reduced additional height per line
 
         float newHeight = baseHeight + (heightPerLine * (linesNeeded - 1));
         newHeight = Math.max(newHeight, r.getHeightInPoints()); // Don't reduce height
