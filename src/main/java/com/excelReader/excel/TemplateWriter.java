@@ -237,10 +237,16 @@ public class TemplateWriter {
         // Auto-size columns with limits
         autoSizeColumnsWithLimit(sheet, isDollarCurrency);
 
-        String outFile =
-                outputDir + "invoice_" +
-                        invoiceNo.replace("/", "_") +
-                        ".xlsm";
+        // Construct filename: Invoice_NUM_MST_InvoiceName
+        String invoiceName = "";
+        if (header != null && header.get("Invoice Name") != null) {
+            invoiceName = header.get("Invoice Name").toString().trim();
+            // Sanitize filename by replacing invalid characters
+            invoiceName = invoiceName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        }
+
+        String fileName = "Invoice_" + invoiceNo.replace("/", "_") + "_MST_" + invoiceName;
+        String outFile = outputDir + fileName + ".xlsm";
 
         try {
             logger.debug("💾 Saving Excel file: {}", outFile);

@@ -180,8 +180,8 @@ public class SourceExcelReader {
                 throw new Exception("Status column not found in items file");
             }
 
-            // Find the row with the matching invoice number
-            boolean found = false;
+            // Find ALL rows with the matching invoice number and update their status
+            int updatedCount = 0;
             for (int r = 1; r <= sheet.getLastRowNum(); r++) {
                 Row row = sheet.getRow(r);
                 if (row == null) continue;
@@ -202,17 +202,16 @@ public class SourceExcelReader {
                                         statusCell = row.createCell(statusColumnIndex);
                                     }
                                     statusCell.setCellValue(newStatus);
-                                    found = true;
-                                    break;
+                                    updatedCount++;
+                                    break; // Break inner loop, continue to next row
                                 }
                             }
                         }
                     }
                 }
-                if (found) break;
             }
 
-            if (!found) {
+            if (updatedCount == 0) {
                 throw new Exception("Invoice number " + invoiceNo + " not found in items file");
             }
 

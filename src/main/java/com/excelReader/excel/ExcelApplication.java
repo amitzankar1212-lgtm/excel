@@ -65,7 +65,7 @@ public class ExcelApplication implements CommandLineRunner {
 				logger.info("🔄 Processing invoice: {}", e.getKey());
 
 				// Update status to "Inprocess" with retry mechanism
-				updateInvoiceStatusWithRetry(resolvedItemsFile, e.getKey(), "Inprocess", logger);
+				updateInvoiceStatusWithRetry(resolvedItemsFile, e.getKey(), "INPROGRESS", logger);
 
 				// Check currency to determine which template to use
 				String currency = "";
@@ -95,7 +95,7 @@ public class ExcelApplication implements CommandLineRunner {
 					logger.info("✅ Successfully generated invoice: {}", e.getKey());
 
 					// Update status to "completed" with retry mechanism
-					updateInvoiceStatusWithRetry(resolvedItemsFile, e.getKey(), "completed", logger);
+					updateInvoiceStatusWithRetry(resolvedItemsFile, e.getKey(), "COMPLETED", logger);
 
 				} catch (Exception ex) {
 					logger.error("❌ Failed to generate invoice: {} - Error: {}", e.getKey(), ex.getMessage(), ex);
@@ -104,10 +104,13 @@ public class ExcelApplication implements CommandLineRunner {
 			}
 
 			logger.info("🎉 All {} invoices generated successfully!", invoices.size());
+			logger.info("✅ Invoice generation process completed successfully. Exiting...");
+			System.exit(0);
 
 		} catch (Exception ex) {
 			logger.error("💥 Fatal error during invoice generation: {}", ex.getMessage(), ex);
-			throw ex;
+			logger.error("❌ Invoice generation process failed. Exiting with error code 1...");
+			System.exit(1);
 		}
 	}
 
