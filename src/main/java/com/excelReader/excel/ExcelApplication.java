@@ -64,6 +64,18 @@ public class ExcelApplication implements CommandLineRunner {
 
 				logger.info("🔄 Processing invoice: {}", e.getKey());
 
+				// Check current status - only process if PENDING
+				String currentStatus = SourceExcelReader.getInvoiceStatus(resolvedItemsFile, e.getKey());
+				if (currentStatus == null) {
+					logger.error("❌ Unable to check status for invoice: {}", e.getKey());
+					continue;
+				}
+
+				if (!"PENDING".equalsIgnoreCase(currentStatus.trim())) {
+					logger.info("⏭️ Skipping invoice {} - Status: '{}' (Already processed)", e.getKey(), currentStatus);
+					continue;
+				}
+
 				// Update status to "Inprocess" with retry mechanism
 				updateInvoiceStatusWithRetry(resolvedItemsFile, e.getKey(), "INPROGRESS", logger);
 

@@ -246,7 +246,7 @@ public class TemplateWriter {
         }
 
         String fileName = "Invoice_" + invoiceNo.replace("/", "_") + "_MST_" + invoiceName;
-        String outFile = outputDir + fileName + ".xlsm";
+        String outFile = outputDir + fileName + ".xlsx";
 
         try {
             logger.debug("💾 Saving Excel file: {}", outFile);
